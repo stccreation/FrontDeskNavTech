@@ -6,27 +6,57 @@ The repository contains a Flutter Web client and a Flask API. Flask serves the c
 
 ## Run locally
 
-Use Python 3.12 and a running MySQL server. See the [database setup](backend/README.md#database-setup) for the SQL to create the database and application account. If you have a prebuilt bundle, place the complete web build under `backend/web/`, with `index.html` directly inside that folder. Build from source with Flutter 3.41.5 if you need to generate the bundle.
+Both options require Git, Python 3.12, and a running MySQL server. See the [database setup](backend/README.md#database-setup) for the SQL to create the database and application account.
 
-### Windows (PowerShell)
+### Option 1 — Quick run
 
-From the repository root, run this build step if you need to generate the web bundle.
+This downloads the backend and the prebuilt web app. You can run it without the Flutter SDK. The same commands work in Windows PowerShell and Linux Bash.
+
+```sh
+git clone --branch main --filter=blob:none --sparse https://github.com/stccreation/FrontDeskNavTech.git
+cd FrontDeskNavTech
+git sparse-checkout set backend
+```
+
+Continue with [Start the backend](#start-the-backend).
+
+### Option 2 — Build and run
+
+Install Flutter 3.41.5 to build from source. The build writes directly to `backend/web/`.
+
+#### Windows (PowerShell)
 
 ```powershell
-cd frontend
+git clone https://github.com/stccreation/FrontDeskNavTech.git
+cd FrontDeskNavTech/frontend
 flutter pub get
 $webOutput = Join-Path (Resolve-Path ../backend).Path web
 flutter build web --no-web-resources-cdn --output $webOutput
 cd ..
 ```
 
-Set up the backend from the repository root.
+#### Linux (Bash)
+
+```bash
+git clone https://github.com/stccreation/FrontDeskNavTech.git
+cd FrontDeskNavTech/frontend
+flutter pub get
+web_output="$(cd ../backend && pwd)/web"
+flutter build web --no-web-resources-cdn --output "$web_output"
+cd ..
+```
+
+### Start the backend
+
+Use these commands from the repository root after either checkout option. On first setup, create the [database and application account](backend/README.md#database-setup) before running the migration.
+
+#### Windows (PowerShell)
 
 ```powershell
 cd backend
 py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
-Copy-Item .env.example .env
+if (!(Test-Path .env)) { Copy-Item .env.example .env }
 .\.venv\Scripts\python.exe -c "import secrets; print(secrets.token_hex(32))"
 ```
 
@@ -43,25 +73,13 @@ Create the first administrator and start the server.
 .\.venv\Scripts\python.exe -m flask --app app run --host 127.0.0.1 --port 5000
 ```
 
-### Linux (Bash)
-
-From the repository root, run this build step if you need to generate the web bundle.
-
-```bash
-cd frontend
-flutter pub get
-web_output="$(cd ../backend && pwd)/web"
-flutter build web --no-web-resources-cdn --output "$web_output"
-cd ..
-```
-
-Set up the backend from the repository root.
+#### Linux (Bash)
 
 ```bash
 cd backend
 python3.12 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
-cp .env.example .env
+test -f .env || cp .env.example .env
 .venv/bin/python -c "import secrets; print(secrets.token_hex(32))"
 ```
 
@@ -80,4 +98,4 @@ Create the first administrator and start the server.
 
 ### Verify the local app
 
-Open [Frontdesk](http://127.0.0.1:5000/) to sign in. Use [the health endpoint](http://127.0.0.1:5000/api/health) to check the database connection. See the [backend guide](backend/README.md) for SLA and email workers.
+Open [Frontdesk](http://127.0.0.1:5000/) to sign in. Use [the health endpoint](http://127.0.0.1:5000/api/health) to check the database connection. On subsequent runs, use your platform's `flask run` command. See the [backend guide](backend/README.md) for the ticket lifecycle and email workers.

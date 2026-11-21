@@ -2,4 +2,4 @@
 .local/
 .venv/
 __pycache__/
-/web/
+/web/.last_build_id
