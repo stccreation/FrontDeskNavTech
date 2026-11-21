@@ -22,7 +22,10 @@ class FrontdeskApp extends StatefulWidget {
   State<FrontdeskApp> createState() => _FrontdeskAppState();
 }
 
-class _FrontdeskAppState extends State<FrontdeskApp> {
+class _FrontdeskAppState extends State<FrontdeskApp>
+    with WidgetsBindingObserver {
+  static const _verificationPrefix = 'verify=';
+  final _navigator = GlobalKey<NavigatorState>();
   late final AuthApi _api = widget.api ?? AuthApi();
   late final TicketApi _tickets = TicketApi(_api.client);
   late final StaffApi _staff = StaffApi(_api.client);
@@ -38,17 +41,47 @@ class _FrontdeskAppState extends State<FrontdeskApp> {
   @override
   void initState() {
     super.initState();
-    final fragment = Uri.base.fragment;
-    if (fragment.startsWith('verify=')) {
-      _verificationToken = fragment.substring('verify='.length);
+    WidgetsBinding.instance.addObserver(this);
+    final token = _tokenFromRoute(Uri.base.fragment);
+    _verificationToken = token;
+    if (token != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _verificationToken == token) {
+          _preserveVerificationLink(token);
+        }
+      });
     }
     _restoreSession();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _api.close();
     super.dispose();
+  }
+
+  String? _tokenFromRoute(String path) => path.startsWith(_verificationPrefix)
+      ? path.substring(_verificationPrefix.length)
+      : null;
+
+  @override
+  Future<bool> didPushRouteInformation(
+    RouteInformation routeInformation,
+  ) async {
+    final token = _tokenFromRoute(routeInformation.uri.path);
+    if (token == null) return false;
+    _navigator.currentState?.popUntil((route) => route.isFirst);
+    setState(() => _verificationToken = token);
+    _preserveVerificationLink(token);
+    return true;
+  }
+
+  void _preserveVerificationLink(String token) {
+    SystemNavigator.routeInformationUpdated(
+      uri: Uri(path: '$_verificationPrefix$token'),
+      replace: true,
+    );
   }
 
   Future<void> _restoreSession() async {
@@ -133,6 +166,7 @@ class _FrontdeskAppState extends State<FrontdeskApp> {
       title: 'Frontdesk',
       debugShowCheckedModeBanner: false,
       theme: frontdeskTheme(),
+      navigatorKey: _navigator,
       initialRoute: '/',
       home: _home(),
     );

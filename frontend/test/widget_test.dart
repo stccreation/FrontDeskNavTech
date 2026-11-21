@@ -92,4 +92,26 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Create a customer account'), findsOneWidget);
   });
+
+  testWidgets('Opens verification from an already open tab', (tester) async {
+    final api = AuthApi(
+      client: MockClient((request) async {
+        expect(request.url.path, '/api/auth/session');
+        return http.Response(
+          jsonEncode({'user': null, 'csrf_token': 'guest'}),
+          200,
+        );
+      }),
+    );
+
+    await tester.pumpWidget(FrontdeskApp(api: api));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(FilledButton, 'Sign in'), findsOneWidget);
+
+    expect(await tester.binding.handlePushRoute('verify=${'A' * 43}'), isTrue);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Verify your email'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Sign in'), findsNothing);
+  });
 }
