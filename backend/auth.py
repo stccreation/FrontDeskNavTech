@@ -1,5 +1,8 @@
+import re
+from email.message import EmailMessage
 from functools import wraps
 from getpass import getuser
+from hashlib import sha256
 from secrets import compare_digest, token_hex, token_urlsafe
 
 import click
@@ -11,6 +14,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 from audit import record_event
 from database import get_db
+from notifications import delivery_settings, send_mail
 
 
 auth = Blueprint("auth", __name__, url_prefix="/api/auth")
@@ -19,6 +23,7 @@ MANAGEMENT_ROLES = ("manager", "admin")
 ACCOUNT_FIELDS = "id, name, email, role, must_change_password, password_version"
 PASSWORD_LENGTH_ERROR = "Use a password between 15 and 128 characters."
 DUMMY_PASSWORD_HASH = generate_password_hash(token_hex(32))
+VERIFICATION_TOKEN = re.compile(r"[A-Za-z0-9_-]{43}")
 
 
 class EmailAlreadyRegistered(Exception):
@@ -96,6 +101,12 @@ def valid_password(password):
     return True
 
 
+def normalize_name(name):
+    if not isinstance(name, str) or not 1 <= len(name.strip()) <= 120:
+        raise ValueError("Enter a name between 1 and 120 characters.")
+    return name.strip()
+
+
 def lock_active_manager(cursor, manager_id):
     cursor.execute(
         "SELECT id FROM accounts WHERE id = %s AND role = 'manager' AND is_active LOCK IN SHARE MODE",
@@ -108,9 +119,7 @@ def create_account(
     name, email, password, role, *, operator=None, actor_id=None,
     manager_id=None, must_change_password=False,
 ):
-    if not isinstance(name, str) or not 1 <= len(name.strip()) <= 120:
-        raise ValueError("Enter a name between 1 and 120 characters.")
-    name = name.strip()
+    name = normalize_name(name)
     email = normalize_email(email)
     if not valid_password(password):
         raise ValueError(PASSWORD_LENGTH_ERROR)
@@ -130,6 +139,8 @@ def create_account(
             )
             account_id = cursor.lastrowid
         details = {"role": role}
+        if role == "customer":
+            details["email_verified"] = True
         if operator is not None:
             details["operator"] = operator
         if manager_id is not None:
@@ -187,11 +198,80 @@ def get_session():
 def register():
     payload = json_object()
     try:
-        account = create_account(payload.get("name"), payload.get("email"), payload.get("password"), "customer")
+        name = normalize_name(payload.get("name"))
+        email = normalize_email(payload.get("email"))
     except ValueError as error:
         return error_response(str(error), 400)
+    settings = delivery_settings()
+    if settings is None:
+        return error_response("Customer signup is temporarily unavailable. Try again later.", 503)
+
+    token = token_urlsafe(32)
+    digest = sha256(token.encode("ascii")).digest()
+    connection = get_db()
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT id FROM accounts WHERE email = %s", (email,))
+        if cursor.fetchone() is not None:
+            return jsonify(verification_requested=True), 202
+        # Avoid repeated sends and keep the most recent issued link usable during the cooldown.
+        cursor.execute(
+            """
+            INSERT INTO customer_verifications (email, name, token_hash, created_at)
+            VALUES (%s, %s, %s, UTC_TIMESTAMP(6))
+            ON DUPLICATE KEY UPDATE
+                name = IF(created_at <= UTC_TIMESTAMP(6) - INTERVAL 1 MINUTE, %s, name),
+                token_hash = IF(created_at <= UTC_TIMESTAMP(6) - INTERVAL 1 MINUTE, %s, token_hash),
+                created_at = IF(created_at <= UTC_TIMESTAMP(6) - INTERVAL 1 MINUTE, UTC_TIMESTAMP(6), created_at)
+            """,
+            (email, name, digest, name, digest),
+        )
+        issue_link = cursor.rowcount > 0
+    connection.commit()
+
+    if issue_link:
+        link = f"{settings['public_url']}/#verify={token}"
+        message = EmailMessage()
+        message["Subject"] = "Verify your Frontdesk email"
+        message["From"] = settings["from"]
+        message["To"] = email
+        message.set_content(
+            f"Verify your email and choose your password:\n\n{link}\n\n"
+            "This link expires in one hour. If you did not request a Frontdesk account, you can ignore this email.\n"
+        )
+        if send_mail(settings, message, timeout=5):
+            return error_response("Could not send the verification email. Try again in a minute.", 503)
+    return jsonify(verification_requested=True), 202
+
+
+@auth.post("/verify-email")
+def verify_email():
+    payload = json_object()
+    token = payload.get("token")
+    password = payload.get("password")
+    if not valid_password(password):
+        return error_response(PASSWORD_LENGTH_ERROR, 400)
+    invalid_link = "This verification link is invalid, expired, or already used. Request a new link."
+    if not isinstance(token, str) or not VERIFICATION_TOKEN.fullmatch(token):
+        return error_response(invalid_link, 400)
+    digest = sha256(token.encode("ascii")).digest()
+    connection = get_db()
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT email, name FROM customer_verifications
+            WHERE token_hash = %s AND created_at > UTC_TIMESTAMP(6) - INTERVAL 1 HOUR
+            FOR UPDATE
+            """,
+            (digest,),
+        )
+        verification = cursor.fetchone()
+        if verification is None:
+            return error_response(invalid_link, 400)
+        cursor.execute("DELETE FROM customer_verifications WHERE token_hash = %s", (digest,))
+    try:
+        account = create_account(verification["name"], verification["email"], password, "customer")
     except EmailAlreadyRegistered:
-        return error_response("An account already uses that email address.", 409)
+        return error_response("An account already uses that email address. Sign in to continue.", 409)
     return sign_in(account), 201
 
 

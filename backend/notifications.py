@@ -127,15 +127,18 @@ def send_link(settings, notification):
     message["From"] = settings["from"]
     message["To"] = notification["recipient"]
     message.set_content(f"Ticket #{ticket_id}\n\n{link}\n")
+    return send_mail(settings, message)
 
+
+def send_mail(settings, message, *, timeout=10):
     server = None
     try:
         tls = ssl.create_default_context()
         args = (settings["host"], settings["port"])
         if settings["security"] == "ssl":
-            server = smtplib.SMTP_SSL(*args, context=tls, timeout=10)
+            server = smtplib.SMTP_SSL(*args, context=tls, timeout=timeout)
         else:
-            server = smtplib.SMTP(*args, timeout=10)
+            server = smtplib.SMTP(*args, timeout=timeout)
             if settings["security"] == "starttls":
                 server.starttls(context=tls)
         if settings["user"]:

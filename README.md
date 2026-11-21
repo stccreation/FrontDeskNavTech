@@ -98,4 +98,24 @@ Create the first administrator and start the server.
 
 ### Verify the local app
 
-Open [Frontdesk](http://127.0.0.1:5000/) to sign in. Use [the health endpoint](http://127.0.0.1:5000/api/health) to check the database connection. On subsequent runs, use your platform's `flask run` command. See the [backend guide](backend/README.md) for the ticket lifecycle and email workers.
+Open [Frontdesk](http://127.0.0.1:5000/) to sign in. Use [the health endpoint](http://127.0.0.1:5000/api/health) to check the database connection. On subsequent runs, use your platform's `flask run` command.
+
+Run the ticket lifecycle worker in a second terminal from `backend/` to process automatic inactivity closures and record overdue deadlines.
+
+**Windows (PowerShell)**
+
+```powershell
+.\.venv\Scripts\python.exe -m flask --app app ticket-lifecycle --watch
+```
+
+**Linux (Bash)**
+
+```bash
+.venv/bin/python -m flask --app app ticket-lifecycle --watch
+```
+
+New customers verify their email before choosing a password. Configure SMTP to test signup locally. See the [backend guide](backend/README.md#staff-accounts-and-audit-history) for local email capture settings and the [notification worker](backend/README.md#dashboards-reports-and-notifications) for ticket replies.
+
+## Assessment
+
+See the [completion note](COMPLETION_NOTE.md) for decisions, verification, and outstanding work.

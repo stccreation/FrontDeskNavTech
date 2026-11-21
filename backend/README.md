@@ -33,6 +33,7 @@ GRANT UPDATE (ended_at, closure_status) ON frontdesk.ticket_sla_cycles TO 'front
 GRANT SELECT, INSERT, UPDATE (deadline_at, deadline_kind, completed_at, breached_at, result) ON frontdesk.ticket_sla_milestones TO 'frontdesk'@'127.0.0.1';
 GRANT UPDATE (paused_work_us) ON frontdesk.ticket_sla_milestones TO 'frontdesk'@'127.0.0.1';
 GRANT SELECT, INSERT, UPDATE (status, claimed_at, sent_at, failed_at, failure_reason) ON frontdesk.reply_notifications TO 'frontdesk'@'127.0.0.1';
+GRANT SELECT, INSERT, UPDATE, DELETE ON frontdesk.customer_verifications TO 'frontdesk'@'127.0.0.1';
 ```
 
 On MySQL, grant the application account schema-scoped locking permission for the queries that use `SELECT ... FOR UPDATE`. [MySQL locking read documentation](https://dev.mysql.com/doc/refman/8.4/en/innodb-locking-reads.html)
@@ -45,7 +46,11 @@ When upgrading an existing Frontdesk database, run `python -m flask --app app sl
 
 ## Staff accounts and audit history
 
-Public registration creates customer accounts. Admins use **Staff Management** to create managers, create agents under an active manager, and move agents between teams. Managers use the same screen to create agents for their own team. Existing agents with no manager appear as **Unassigned** for admins.
+New customers request a verification link with their name and email. The link is valid for one hour and allows them to choose a password and create their account. Existing accounts retain access. Signup sends email directly, so configure the portal URL and SMTP settings in `.env` and reload Flask to enable registration. The reply notification worker handles ticket emails separately.
+
+For local testing with an SMTP capture server running on the same machine, set `FRONTDESK_PUBLIC_URL=http://127.0.0.1:5000`, `FRONTDESK_SMTP_HOST=127.0.0.1`, `FRONTDESK_SMTP_SECURITY=plain`, and the capture server's port and a valid sender address. Leave its SMTP username and password empty if it accepts anonymous local connections.
+
+Admins use **Staff Management** to create managers, create agents under an active manager, and move agents between teams. Managers use the same screen to create agents for their own team. Existing agents with no manager appear as **Unassigned** for admins.
 
 Staff created in the portal sign in with their temporary password and choose a permanent password before accessing their workspace. Creating accounts, moving agents, and setting the first permanent password are recorded in the audit history.
 

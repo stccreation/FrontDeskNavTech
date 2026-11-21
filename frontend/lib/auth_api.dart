@@ -45,8 +45,15 @@ class AuthApi {
   Future<Account?> signIn(String email, String password) =>
       _post('login', {'email': email, 'password': password});
 
-  Future<Account?> register(String name, String email, String password) =>
-      _post('register', {'name': name, 'email': email, 'password': password});
+  Future<void> register(String name, String email) async {
+    await client.post('/api/auth/register', {
+      'name': name,
+      'email': email,
+    }, timeout: const Duration(seconds: 30));
+  }
+
+  Future<Account?> verifyEmail(String token, String password) =>
+      _post('verify-email', {'token': token, 'password': password});
 
   Future<Account?> signOut() => _post('logout', {});
 

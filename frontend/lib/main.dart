@@ -29,6 +29,7 @@ class _FrontdeskAppState extends State<FrontdeskApp> {
   late final HolidayApi _holidays = HolidayApi(_api.client);
   late final ReportsApi _reports = ReportsApi(_api.client);
   int? _linkedTicket = int.tryParse(Uri.base.queryParameters['ticket'] ?? '');
+  String? _verificationToken;
   Account? _account;
   String? _error;
   bool _loading = true;
@@ -37,6 +38,10 @@ class _FrontdeskAppState extends State<FrontdeskApp> {
   @override
   void initState() {
     super.initState();
+    final fragment = Uri.base.fragment;
+    if (fragment.startsWith('verify=')) {
+      _verificationToken = fragment.substring('verify='.length);
+    }
     _restoreSession();
   }
 
@@ -98,10 +103,28 @@ class _FrontdeskAppState extends State<FrontdeskApp> {
       );
     }
 
+    final token = _verificationToken;
     return _CredentialsForm(
+      key: ValueKey(token),
       api: _api,
-      onSignedIn: (account) => setState(() => _account = account),
+      verificationToken: token,
+      onCancelVerification: token == null ? null : () => _finishVerification(),
+      onSignedIn: (account) {
+        if (token == null) {
+          setState(() => _account = account);
+        } else {
+          _finishVerification(account);
+        }
+      },
     );
+  }
+
+  void _finishVerification([Account? account]) {
+    SystemNavigator.routeInformationUpdated(uri: Uri(path: '/'), replace: true);
+    setState(() {
+      _verificationToken = null;
+      _account = account ?? _account;
+    });
   }
 
   @override
@@ -110,13 +133,14 @@ class _FrontdeskAppState extends State<FrontdeskApp> {
       title: 'Frontdesk',
       debugShowCheckedModeBanner: false,
       theme: frontdeskTheme(),
+      initialRoute: '/',
       home: _home(),
     );
   }
 
   Widget _home() {
     final account = _account;
-    if (account == null) return _entryPage();
+    if (account == null || _verificationToken != null) return _entryPage();
     if (account.mustChangePassword) {
       return _entryPage(
         content: StaffPasswordForm(
@@ -301,10 +325,18 @@ class _EntryBanner extends StatelessWidget {
 }
 
 class _CredentialsForm extends StatefulWidget {
-  const _CredentialsForm({required this.api, required this.onSignedIn});
+  const _CredentialsForm({
+    super.key,
+    required this.api,
+    required this.onSignedIn,
+    this.verificationToken,
+    this.onCancelVerification,
+  });
 
   final AuthApi api;
   final ValueChanged<Account> onSignedIn;
+  final String? verificationToken;
+  final VoidCallback? onCancelVerification;
 
   @override
   State<_CredentialsForm> createState() => _CredentialsFormState();
@@ -316,6 +348,7 @@ class _CredentialsFormState extends State<_CredentialsForm> {
   final _email = TextEditingController();
   final _password = TextEditingController();
   bool _registering = false;
+  bool _verificationRequested = false;
   bool _submitting = false;
   bool _obscurePassword = true;
   String? _error;
@@ -335,9 +368,15 @@ class _CredentialsFormState extends State<_CredentialsForm> {
       _error = null;
     });
     try {
-      final account = _registering
-          ? await widget.api.register(_name.text, _email.text, _password.text)
-          : await widget.api.signIn(_email.text, _password.text);
+      if (_registering) {
+        await widget.api.register(_name.text, _email.text);
+        if (mounted) setState(() => _verificationRequested = true);
+        return;
+      }
+      final token = widget.verificationToken;
+      final account = token == null
+          ? await widget.api.signIn(_email.text, _password.text)
+          : await widget.api.verifyEmail(token, _password.text);
       if (mounted && account != null) {
         TextInput.finishAutofillContext();
         widget.onSignedIn(account);
@@ -350,10 +389,11 @@ class _CredentialsFormState extends State<_CredentialsForm> {
   }
 
   void _toggleMode() {
-    _form.currentState!.reset();
+    _form.currentState?.reset();
     _password.clear();
     setState(() {
       _registering = !_registering;
+      _verificationRequested = false;
       _obscurePassword = true;
       _error = null;
     });
@@ -363,6 +403,28 @@ class _CredentialsFormState extends State<_CredentialsForm> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final error = _error;
+    final verifying = widget.verificationToken != null;
+    if (_verificationRequested) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('Check your email', style: theme.textTheme.headlineMedium),
+          const SizedBox(height: 16),
+          const Text(
+            'If the address is eligible, a verification link will arrive shortly. Open the link to choose a password and finish creating your account.',
+          ),
+          const SizedBox(height: 16),
+          TextButton(
+            onPressed: () => setState(() => _verificationRequested = false),
+            child: const Text('Request another link'),
+          ),
+          TextButton(
+            onPressed: _toggleMode,
+            child: const Text('Back to sign in'),
+          ),
+        ],
+      );
+    }
 
     return AutofillGroup(
       onDisposeAction: AutofillContextAction.cancel,
@@ -372,13 +434,19 @@ class _CredentialsFormState extends State<_CredentialsForm> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              _registering ? 'Create a customer account' : 'Sign in',
+              verifying
+                  ? 'Verify your email'
+                  : _registering
+                  ? 'Create a customer account'
+                  : 'Sign in',
               style: theme.textTheme.headlineMedium,
             ),
             const SizedBox(height: 16),
             Text(
-              _registering
-                  ? 'Track your requests and reply to the support team.'
+              verifying
+                  ? 'Choose a password to finish creating your account.'
+                  : _registering
+                  ? 'We’ll email you a link to finish creating your account.'
                   : 'Enter your account details to open your workspace.',
               style: const TextStyle(color: deskMuted),
             ),
@@ -398,58 +466,69 @@ class _CredentialsFormState extends State<_CredentialsForm> {
               ),
               const SizedBox(height: 12),
             ],
-            TextFormField(
-              controller: _email,
-              enabled: !_submitting,
-              keyboardType: TextInputType.emailAddress,
-              textInputAction: TextInputAction.next,
-              autocorrect: false,
-              autofillHints: const [
-                AutofillHints.username,
-                AutofillHints.email,
-              ],
-              decoration: const InputDecoration(
-                labelText: 'Email address',
-                border: OutlineInputBorder(),
+            if (!verifying)
+              TextFormField(
+                controller: _email,
+                enabled: !_submitting,
+                keyboardType: TextInputType.emailAddress,
+                textInputAction: _registering
+                    ? TextInputAction.done
+                    : TextInputAction.next,
+                onFieldSubmitted: _registering ? (_) => _submit() : null,
+                autocorrect: false,
+                autofillHints: const [
+                  AutofillHints.username,
+                  AutofillHints.email,
+                ],
+                decoration: const InputDecoration(
+                  labelText: 'Email address',
+                  border: OutlineInputBorder(),
+                ),
+                validator: (value) =>
+                    value!.trim().isEmpty ? 'Enter your email address.' : null,
               ),
-              validator: (value) =>
-                  value!.trim().isEmpty ? 'Enter your email address.' : null,
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _password,
-              enabled: !_submitting,
-              obscureText: _obscurePassword,
-              autocorrect: false,
-              enableSuggestions: false,
-              autofillHints: [
-                _registering
-                    ? AutofillHints.newPassword
-                    : AutofillHints.password,
-              ],
-              textInputAction: TextInputAction.done,
-              onFieldSubmitted: (_) => _submit(),
-              decoration: InputDecoration(
-                labelText: 'Password',
-                border: const OutlineInputBorder(),
-                helperText: _registering ? 'Use at least 15 characters.' : null,
-                suffixIcon: IconButton(
-                  onPressed: () =>
-                      setState(() => _obscurePassword = !_obscurePassword),
-                  tooltip: _obscurePassword ? 'Show password' : 'Hide password',
-                  icon: Icon(
-                    _obscurePassword ? Icons.visibility : Icons.visibility_off,
+            if (!_registering) ...[
+              if (!verifying) const SizedBox(height: 12),
+              TextFormField(
+                controller: _password,
+                enabled: !_submitting,
+                obscureText: _obscurePassword,
+                autocorrect: false,
+                enableSuggestions: false,
+                autofillHints: [
+                  verifying
+                      ? AutofillHints.newPassword
+                      : AutofillHints.password,
+                ],
+                textInputAction: TextInputAction.done,
+                onFieldSubmitted: (_) => _submit(),
+                decoration: InputDecoration(
+                  labelText: verifying ? 'New password' : 'Password',
+                  border: const OutlineInputBorder(),
+                  helperText: verifying ? 'Use 15 to 128 characters.' : null,
+                  suffixIcon: IconButton(
+                    onPressed: () =>
+                        setState(() => _obscurePassword = !_obscurePassword),
+                    tooltip: _obscurePassword
+                        ? 'Show password'
+                        : 'Hide password',
+                    icon: Icon(
+                      _obscurePassword
+                          ? Icons.visibility
+                          : Icons.visibility_off,
+                    ),
                   ),
                 ),
+                validator: (value) {
+                  if (value!.isEmpty) return 'Enter your password.';
+                  if (verifying &&
+                      (value.runes.length < 15 || value.runes.length > 128)) {
+                    return 'Use 15 to 128 characters.';
+                  }
+                  return null;
+                },
               ),
-              validator: (value) {
-                if (value!.isEmpty) return 'Enter your password.';
-                if (_registering && value.runes.length < 15) {
-                  return 'Use at least 15 characters.';
-                }
-                return null;
-              },
-            ),
+            ],
             if (error != null) _ErrorMessage(error),
             const SizedBox(height: 20),
             FilledButton(
@@ -457,15 +536,21 @@ class _CredentialsFormState extends State<_CredentialsForm> {
               child: Text(
                 _submitting
                     ? 'Please wait…'
+                    : verifying
+                    ? 'Verify email and sign in'
                     : _registering
-                    ? 'Create account'
+                    ? 'Send verification link'
                     : 'Sign in',
               ),
             ),
             TextButton(
-              onPressed: _submitting ? null : _toggleMode,
+              onPressed: _submitting
+                  ? null
+                  : (widget.onCancelVerification ?? _toggleMode),
               child: Text(
-                _registering ? 'Back to sign in' : 'Create a customer account',
+                verifying || _registering
+                    ? 'Back to sign in'
+                    : 'Create a customer account',
               ),
             ),
           ],

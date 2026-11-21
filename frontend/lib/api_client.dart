@@ -23,17 +23,21 @@ class ApiClient {
             _client.get(Uri.base.resolve(path).replace(queryParameters: query)),
       );
 
-  Future<Map<String, dynamic>> post(String path, Map<String, Object?> data) =>
-      _request(
-        () => _client.post(
-          Uri.base.resolve(path),
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRF-Token': csrfToken ?? '',
-          },
-          body: jsonEncode(data),
-        ),
-      );
+  Future<Map<String, dynamic>> post(
+    String path,
+    Map<String, Object?> data, {
+    Duration timeout = const Duration(seconds: 10),
+  }) => _request(
+    () => _client.post(
+      Uri.base.resolve(path),
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': csrfToken ?? '',
+      },
+      body: jsonEncode(data),
+    ),
+    timeout: timeout,
+  );
 
   Future<Map<String, dynamic>> postWithFiles(
     String path,

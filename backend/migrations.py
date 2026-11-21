@@ -225,6 +225,19 @@ def create_reply_notifications(cursor):
     )
 
 
+def create_customer_verifications(cursor):
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS customer_verifications (
+            email VARCHAR(254) COLLATE utf8mb4_bin PRIMARY KEY,
+            name VARCHAR(120) NOT NULL,
+            token_hash BINARY(32) NOT NULL UNIQUE,
+            created_at DATETIME(6) NOT NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        """
+    )
+
+
 MIGRATIONS = (
     ("001_accounts_and_audit", create_accounts_and_audit),
     ("002_tickets_and_messages", create_tickets_and_messages),
@@ -233,6 +246,7 @@ MIGRATIONS = (
     ("005_sla_calendar", create_sla_tables),
     ("006_ticket_lifecycle", add_ticket_lifecycle),
     ("007_reply_notifications", create_reply_notifications),
+    ("008_customer_verifications", create_customer_verifications),
 )
 
 
