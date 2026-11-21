@@ -22,7 +22,7 @@ from tickets import tickets
 
 
 BACKEND_DIR = Path(__file__).resolve().parent
-WEB_BUILD_DIR = BACKEND_DIR.parent / "frontend" / "build" / "web"
+WEB_BUILD_DIR = BACKEND_DIR / "web"
 
 
 def create_app():
