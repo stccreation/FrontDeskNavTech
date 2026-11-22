@@ -4,7 +4,7 @@ The Flask development server serves the API and the built Flutter site at `http:
 
 ## Database setup
 
-Start your MySQL server and connect using a database administrator account. Run the following SQL with your chosen application password.
+Start your MySQL or MariaDB server and connect using a database administrator account. Run the following SQL with your chosen application password.
 
 ```sql
 CREATE DATABASE frontdesk CHARACTER SET utf8mb4;
@@ -82,7 +82,7 @@ The ticket queue shows separate response and resolution overdue indicators. Tick
 
 Managers and admins use **Holidays** to add and remove dates. Edits affect future working time and write an audit entry for every deadline that moves. Completed milestones and recorded breaches retain their historical deadlines.
 
-The provisional urgent resolution rule uses same-day close for arrivals and escalations within working hours. Outside working hours it uses the next working day's close. Review the 6:00 p.m. exception before launch.
+The urgent resolution rule uses same-day close for arrivals and escalations before closing on a working day, including before opening. An urgent ticket arriving at 6:00 PM on a working day is due at 6:30 PM. At closing time or on a non-working day, the deadline moves to the next working day's close.
 
 Ticket views calculate current overdue indicators when loaded. The idempotent `sla-check` command records outstanding breaches in the audit history. Responses and timing edits also record applicable breaches as they happen.
 
@@ -105,11 +105,11 @@ python -m flask --app app ticket-lifecycle --watch
 
 ## Dashboards, reports, and notifications
 
-The ticket dashboard shows counts and status filters within the selected ticket scope. Customers can use **Needs your reply** to find their tickets waiting on them. Managers and admins use **Reports** to review first-response and resolution misses, open each ticket's audit history, and see resolved and inactivity-closed outcomes.
+The ticket dashboard shows counts and status filters within the selected ticket scope. Customers can use **Needs your reply** to find their tickets waiting on them. Managers and admins use **Reports** to review deadline misses, open each ticket's audit history, see closure activity over time, and compare staff resolutions.
 
-Report dates are inclusive in IST. Misses use the date of the missed deadline. Closures count each SLA cycle ending in the period, with reopening counted when a later cycle exists. Notification totals use the date each message was queued.
+Report dates are inclusive in IST. Misses use the date of the missed deadline. Closures count each SLA cycle ending in the period, with reopening counted when a later cycle exists. The leaderboard credits the staff member who resolved each cycle and shows how many they resolved on time. Notification totals use the date each message was queued.
 
-New public staff replies queue one email containing the ticket number and a portal link. The customer signs in to follow the link. Configure the `FRONTDESK_PUBLIC_URL` and `FRONTDESK_SMTP_*` values from `.env.example` to deliver the queued emails. Use `starttls` or `ssl` for an external mail server. Plain SMTP is reserved for loopback tests.
+New public staff replies queue one email containing the ticket number and a portal link. The customer signs in to follow the link. Configure the `FRONTDESK_PUBLIC_URL` and `FRONTDESK_SMTP_*` values from `.env.example` to deliver the queued emails. An external mail server requires an HTTPS portal URL and `starttls` or `ssl`. Plain SMTP and HTTP portal URLs are reserved for loopback tests.
 
 ```sh
 python -m flask --app app notification-worker --watch

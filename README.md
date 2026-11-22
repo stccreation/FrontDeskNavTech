@@ -6,7 +6,7 @@ The repository contains a Flutter Web client and a Flask API. Flask serves the c
 
 ## Run locally
 
-Both options require Git, Python 3.12, and a running MySQL server. See the [database setup](backend/README.md#database-setup) for the SQL to create the database and application account.
+Both options require Git, Python 3.12, and a running MySQL or MariaDB server. See the [database setup](backend/README.md#database-setup) for the SQL to create the database and application account.
 
 ### Option 1 — Quick run
 
@@ -66,7 +66,7 @@ Edit `.env` with your database credentials, set `SECRET_KEY` to the generated va
 .\.venv\Scripts\python.exe -m flask --app app db-upgrade --user root --ask-password
 ```
 
-Create the first administrator and start the server.
+Create the first administrator with a password of 15 to 128 characters, then start the server.
 
 ```powershell
 .\.venv\Scripts\python.exe -m flask --app app staff-create --role admin --name "Frontdesk Admin" --email admin@example.com
@@ -89,7 +89,7 @@ Edit `.env` with your database credentials, set `SECRET_KEY` to the generated va
 .venv/bin/python -m flask --app app db-upgrade --user root --ask-password
 ```
 
-Create the first administrator and start the server.
+Create the first administrator with a password of 15 to 128 characters, then start the server.
 
 ```bash
 .venv/bin/python -m flask --app app staff-create --role admin --name "Frontdesk Admin" --email admin@example.com
@@ -114,7 +114,7 @@ Run the ticket lifecycle worker in a second terminal from `backend/` to process 
 .venv/bin/python -m flask --app app ticket-lifecycle --watch
 ```
 
-New customers verify their email before choosing a password. Configure SMTP to test signup locally. See the [backend guide](backend/README.md#staff-accounts-and-audit-history) for local email capture settings and the [notification worker](backend/README.md#dashboards-reports-and-notifications) for ticket replies.
+You can sign in with the administrator account as soon as Flask starts. To test customer signup, configure SMTP and the portal URL in `.env`. To send queued ticket reply emails, also start the notification worker in a separate terminal. See the [local SMTP settings](backend/README.md#staff-accounts-and-audit-history) and [notification worker command](backend/README.md#dashboards-reports-and-notifications).
 
 ## Assessment
 
