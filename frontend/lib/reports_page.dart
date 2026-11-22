@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'api_client.dart';
 import 'ticket_ui.dart';
 import 'frontdesk_design.dart';
+import 'report_charts.dart';
 
 String _dateOnly(DateTime date) => date.toIso8601String().split('T').first;
 
@@ -51,6 +52,16 @@ class SlaReport {
       inactive = ClosureTotal.fromJson(
         data['closures']['closed_inactivity'] as Map<String, dynamic>,
       ),
+      intervalDays = data['closure_activity']?['interval_days'] as int? ?? 1,
+      buckets =
+          (data['closure_activity']?['buckets'] as List<dynamic>? ?? const [])
+              .map(
+                (item) => ClosureBucket.fromJson(item as Map<String, dynamic>),
+              )
+              .toList(),
+      leaderboard = (data['leaderboard'] as List<dynamic>? ?? const [])
+          .map((item) => ResolverTotal.fromJson(item as Map<String, dynamic>))
+          .toList(),
       notifications = Map<String, dynamic>.from(data['notifications'] as Map),
       rows = (data['tickets'] as List<dynamic>)
           .map((row) => MissedDeadline.fromJson(row as Map<String, dynamic>))
@@ -62,6 +73,9 @@ class SlaReport {
   final Map<String, int> missed;
   final ClosureTotal resolved;
   final ClosureTotal inactive;
+  final int intervalDays;
+  final List<ClosureBucket> buckets;
+  final List<ResolverTotal> leaderboard;
   final Map<String, dynamic> notifications;
   final List<MissedDeadline> rows;
   final int? nextOffset;
@@ -207,14 +221,14 @@ class _ReportsPageState extends State<ReportsPage> {
       body: Align(
         alignment: Alignment.topCenter,
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1060),
+          constraints: const BoxConstraints(maxWidth: 1280),
           child: ListView(
             padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
             children: [
               DeskPageHeading(
                 'SLA reports',
                 description:
-                    'Review service deadlines and ticket outcomes for the selected period.',
+                    'Ticket outcomes, service deadlines and staff resolutions.',
                 actions: [
                   IconButton(
                     onPressed: _loading ? null : _load,
@@ -240,18 +254,65 @@ class _ReportsPageState extends State<ReportsPage> {
                   ),
                 ),
               if (report != null) ...[
-                DeskTileGrid(
-                  columns: 2,
-                  children: [
-                    _Metric(
-                      label: 'First responses missed',
-                      value: report.missed['first_response'] ?? 0,
-                    ),
-                    _Metric(
-                      label: 'Resolutions missed',
-                      value: report.missed['resolution'] ?? 0,
-                    ),
-                  ],
+                LayoutBuilder(
+                  builder: (context, bounds) => DeskTileGrid(
+                    columns: bounds.maxWidth >= 720 ? 4 : 2,
+                    children: [
+                      _Metric(
+                        label: 'Resolved cycles',
+                        value: report.resolved.count,
+                        icon: Icons.task_alt,
+                        tint: deskGreen,
+                      ),
+                      _Metric(
+                        label: 'Closed for inactivity',
+                        value: report.inactive.count,
+                        icon: Icons.hourglass_bottom,
+                        tint: deskAmber,
+                      ),
+                      _Metric(
+                        label: 'Reply deadlines missed',
+                        value: report.missed['first_response'] ?? 0,
+                        icon: Icons.mark_chat_unread_outlined,
+                        tint: deskLate,
+                      ),
+                      _Metric(
+                        label: 'Resolution deadlines missed',
+                        value: report.missed['resolution'] ?? 0,
+                        icon: Icons.timer_off_outlined,
+                        tint: deskLate,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                LayoutBuilder(
+                  builder: (context, bounds) {
+                    final chart = ClosureActivityChart(
+                      key: ValueKey(('activity', report.period)),
+                      buckets: report.buckets,
+                      intervalDays: report.intervalDays,
+                    );
+                    final leaderboard = ResolutionLeaderboard(
+                      key: ValueKey(('leaderboard', report.period)),
+                      entries: report.leaderboard,
+                    );
+                    if (bounds.maxWidth >= 760) {
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        spacing: 16,
+                        children: [
+                          Expanded(flex: 3, child: chart),
+                          Expanded(flex: 2, child: leaderboard),
+                        ],
+                      );
+                    }
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      spacing: 16,
+                      children: [chart, leaderboard],
+                    );
+                  },
                 ),
                 const SizedBox(height: 24),
                 Text('Ticket closures', style: theme.textTheme.titleLarge),
@@ -289,7 +350,7 @@ class _ReportsPageState extends State<ReportsPage> {
                   ],
                 ),
                 const SizedBox(height: 8),
-                if (_rows.isEmpty && !_loading)
+                if (_rows.isEmpty && !_loading && error == null)
                   const DeskEmptyState(
                     icon: Icons.task_alt,
                     title: 'No missed deadlines in this view',
@@ -337,9 +398,8 @@ class _ReportsPageState extends State<ReportsPage> {
                   style: const TextStyle(color: deskMuted),
                 ),
                 const SizedBox(height: 10),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 8,
+                DeskTileGrid(
+                  columns: 3,
                   children: [
                     for (final status in const {
                       'queued': 'Queued',
@@ -362,10 +422,17 @@ class _ReportsPageState extends State<ReportsPage> {
 }
 
 class _Metric extends StatelessWidget {
-  const _Metric({required this.label, required this.value});
+  const _Metric({
+    required this.label,
+    required this.value,
+    this.icon,
+    this.tint = deskGreen,
+  });
 
   final String label;
   final int value;
+  final IconData? icon;
+  final Color tint;
 
   @override
   Widget build(BuildContext context) => Card(
@@ -376,9 +443,30 @@ class _Metric extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('$value', style: Theme.of(context).textTheme.headlineMedium),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  MaterialLocalizations.of(context).formatDecimal(value),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.headlineMedium?.copyWith(color: tint),
+                ),
+              ),
+              if (icon != null)
+                CircleAvatar(
+                  radius: 16,
+                  backgroundColor: tint.withValues(alpha: .09),
+                  foregroundColor: tint,
+                  child: Icon(icon, size: 17),
+                ),
+            ],
+          ),
           const SizedBox(height: 5),
-          Text(label),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+          ),
         ],
       ),
     ),

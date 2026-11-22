@@ -60,18 +60,52 @@ def sla_report():
         )
         rows = list(cursor.fetchall())
 
+        # Bucket by days from local midnight at the start of the report.
+        span = (last - first).days + 1
+        interval = 1 if span <= 14 else 7 if span <= 98 else 28
+        activity = [
+            {
+                "from": (first + index * DAY).isoformat(),
+                "to": min(first + (index + interval - 1) * DAY, last).isoformat(),
+                "resolved": 0,
+                "closed_inactivity": 0,
+            }
+            for index in range(0, span, interval)
+        ]
         cursor.execute(
             """
-            SELECT closed.closure_status, COUNT(*) AS count, SUM(reopened.id IS NOT NULL) AS reopened
+            SELECT TIMESTAMPDIFF(DAY, %s, closed.ended_at) DIV %s AS bucket,
+                   closed.closure_status, COUNT(*) AS count, SUM(reopened.id IS NOT NULL) AS reopened
             FROM ticket_sla_cycles closed LEFT JOIN ticket_sla_cycles reopened
               ON reopened.ticket_id = closed.ticket_id AND reopened.cycle_number = closed.cycle_number + 1
             WHERE closed.ended_at >= %s AND closed.ended_at < %s AND closed.closure_status IS NOT NULL
-            GROUP BY closed.closure_status
+            GROUP BY bucket, closed.closure_status
+            """,
+            (start, interval, start, end),
+        )
+        for row in cursor.fetchall():
+            status = row["closure_status"]
+            activity[row["bucket"]][status] = row["count"]
+            closures[status]["count"] += row["count"]
+            closures[status]["reopened"] += int(row["reopened"])
+
+        cursor.execute(
+            """
+            SELECT actor.id AS staff_id, actor.name, COUNT(*) AS resolved,
+                   COUNT(CASE WHEN m.result = 'met' THEN 1 END) AS on_time
+            FROM ticket_sla_cycles c JOIN audit_events e
+              ON e.entity_type = 'ticket' AND e.entity_id = c.ticket_id
+              AND e.action = 'ticket_resolved' AND e.occurred_at = c.ended_at
+              AND CAST(JSON_UNQUOTE(JSON_EXTRACT(e.details, '$.cycle_number')) AS UNSIGNED) = c.cycle_number
+            JOIN accounts actor ON actor.id = e.actor_account_id
+            JOIN ticket_sla_milestones m ON m.cycle_id = c.id AND m.milestone = 'resolution'
+            WHERE c.closure_status = 'resolved' AND c.ended_at >= %s AND c.ended_at < %s
+            GROUP BY actor.id, actor.name
+            ORDER BY resolved DESC, actor.name, actor.id
             """,
             (start, end),
         )
-        for row in cursor.fetchall():
-            closures[row["closure_status"]] = {"count": row["count"], "reopened": int(row["reopened"])}
+        leaderboard = cursor.fetchall()
 
         cursor.execute("SELECT status, COUNT(*) AS count FROM reply_notifications WHERE queued_at >= %s AND queued_at < %s GROUP BY status", (start, end))
         for row in cursor.fetchall():
@@ -85,6 +119,8 @@ def sla_report():
     return jsonify(
         period={"from": first.isoformat(), "to": last.isoformat(), "today": today.isoformat()},
         misses=misses, closures=closures,
+        closure_activity={"interval_days": interval, "buckets": activity},
+        leaderboard=leaderboard,
         notifications=notifications | {"delivery_configured": delivery_settings() is not None},
         tickets=visible,
         next_offset=offset + PAGE_SIZE if len(rows) > PAGE_SIZE else None,
