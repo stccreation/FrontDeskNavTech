@@ -2,7 +2,7 @@
 
 Frontdesk is a support portal for Arvo Systems. Customers open tickets and share attachments. Agents claim tickets, reply, and leave private notes. Managers can review missed deadlines and trace changes through the ticket history.
 
-The repository contains a Flutter Web client and a Flask API. Flask serves the compiled site from `backend/web/` and the API from the same address.
+The repository contains a Flutter Web client and a Flask API. Flask serves the compiled site from `backend/web/` and the API from the same address. Restart the Flask service after replacing the web build so it picks up the new asset versions.
 
 ## Run locally
 

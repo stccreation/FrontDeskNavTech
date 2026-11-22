@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pymysql
 from dotenv import load_dotenv
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, jsonify, request
 
 from attachments import AttachmentError
 from audit import recent_events
@@ -19,6 +19,7 @@ from reports import reports
 from sla import sla_backfill, sla_check
 from staff import staff
 from tickets import tickets
+from web_app import register_web_app
 
 
 BACKEND_DIR = Path(__file__).resolve().parent
@@ -104,12 +105,6 @@ def create_app():
     def audit_history():
         return jsonify(events=recent_events(get_db()))
 
-    @app.get("/")
-    def index():
-        return send_from_directory(WEB_BUILD_DIR, "index.html")
-
-    @app.get("/<path:asset>")
-    def web_asset(asset):
-        return send_from_directory(WEB_BUILD_DIR, asset)
+    register_web_app(app, WEB_BUILD_DIR)
 
     return app
