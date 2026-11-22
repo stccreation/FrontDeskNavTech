@@ -158,8 +158,10 @@ class _TicketWorkspaceState extends State<TicketWorkspace> {
           dense: true,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
           selected: active,
+          textColor: deskRailText,
+          iconColor: deskRailText,
           selectedColor: deskInk,
-          selectedTileColor: const Color(0xFFDEEDCF),
+          selectedTileColor: deskMint,
           leading: Icon(icon, size: 19),
           horizontalTitleGap: 10,
           contentPadding: const EdgeInsets.symmetric(horizontal: 12),
@@ -184,21 +186,22 @@ class _TicketWorkspaceState extends State<TicketWorkspace> {
         style: const TextStyle(
           fontSize: 12,
           fontWeight: FontWeight.w700,
-          color: deskMuted,
+          color: Color(0xFFADCBBC),
+          letterSpacing: .5,
         ),
       ),
     );
     return Material(
-      color: deskPaper,
+      color: deskRail,
       child: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const Padding(
               padding: EdgeInsets.fromLTRB(22, 22, 12, 22),
-              child: DeskBrand(),
+              child: DeskBrand(dark: true),
             ),
-            const Divider(height: 1),
+            const Divider(height: 1, color: Color(0xFF38564B)),
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -241,12 +244,24 @@ class _TicketWorkspaceState extends State<TicketWorkspace> {
                 ],
               ),
             ),
-            const Divider(height: 1),
+            const Divider(height: 1, color: Color(0xFF38564B)),
             Padding(
               padding: const EdgeInsets.all(18),
               child: Row(
                 children: [
-                  const Icon(Icons.account_circle_outlined, color: deskMuted),
+                  CircleAvatar(
+                    radius: 17,
+                    backgroundColor: const Color(0xFF34574B),
+                    foregroundColor: deskMint,
+                    child: Text(
+                      account.name
+                          .trim()
+                          .characters
+                          .take(1)
+                          .toString()
+                          .toUpperCase(),
+                    ),
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Column(
@@ -256,13 +271,16 @@ class _TicketWorkspaceState extends State<TicketWorkspace> {
                           account.name,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontWeight: FontWeight.w700),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
                         ),
                         Text(
                           account.roleLabel,
                           style: const TextStyle(
                             fontSize: 12,
-                            color: deskMuted,
+                            color: deskRailText,
                           ),
                         ),
                       ],
@@ -328,7 +346,7 @@ class _TicketWorkspaceState extends State<TicketWorkspace> {
                           Expanded(
                             child: Text(
                               sidebar
-                                  ? 'Arvo Systems  /  Support'
+                                  ? 'Arvo Systems  /  ${account.isCustomer ? 'Customer portal' : 'Support workspace'}'
                                   : 'Frontdesk',
                               style: const TextStyle(
                                 color: deskInk,
@@ -338,7 +356,10 @@ class _TicketWorkspaceState extends State<TicketWorkspace> {
                             ),
                           ),
                           if (!sidebar && width >= 650)
-                            Flexible(
+                            ConstrainedBox(
+                              constraints: BoxConstraints(
+                                maxWidth: width * .36,
+                              ),
                               child: Text(
                                 '${account.name} · ${account.roleLabel}',
                                 overflow: TextOverflow.ellipsis,
@@ -380,146 +401,68 @@ class _TicketWorkspaceState extends State<TicketWorkspace> {
             _ => 'Unassigned queue',
           };
     final description = account.isCustomer
-        ? 'Follow your requests and reply to the support team.'
+        ? 'Track your requests and reply to the support team.'
         : switch (_scope) {
-            'mine' => 'Your active conversations and service deadlines.',
-            'all' => 'Review tickets and deadlines across all teams.',
-            _ => 'Claim a ticket to start helping a customer.',
+            'mine' => 'Your conversations and upcoming deadlines.',
+            'all' => 'Tickets and service deadlines across all teams.',
+            _ => 'Claim a ticket to start a conversation.',
           };
     final filters = [
-      ('all', 'All statuses', Icons.layers_outlined, deskGreen),
-      ('open', 'Open', Icons.radio_button_checked, const Color(0xFF28657C)),
+      ('all', 'All tickets', Icons.inbox_outlined, deskGreen),
+      ('open', 'Open', Icons.forum_outlined, const Color(0xFF28657C)),
       (
         'waiting',
         account.isCustomer ? 'Needs your reply' : 'Waiting on customer',
         Icons.hourglass_empty,
-        const Color(0xFF86601E),
+        deskAmber,
       ),
-      if (!account.isCustomer)
-        ('overdue', 'Overdue', Icons.alarm, const Color(0xFFAC483B)),
+      if (!account.isCustomer) ('overdue', 'Overdue', Icons.alarm, deskLate),
       if (_scope != 'queue') ('closed', 'Closed', Icons.task_alt, deskMuted),
     ];
     return LayoutBuilder(
       builder: (context, bounds) {
-        final small = bounds.maxWidth < 620;
-        final padding = small ? 16.0 : 28.0;
+        final inset = bounds.maxWidth < 600 ? 16.0 : 28.0;
+        final width = bounds.maxWidth - 2 * inset;
+        final table = width >= 760;
+        final selected = filters.firstWhere((f) => f.$1 == _filter);
+        final count = _summary[_filter];
         return CustomScrollView(
           key: PageStorageKey('queue-$_scope'),
           slivers: [
             SliverPadding(
-              padding: EdgeInsets.fromLTRB(padding, padding, padding, 0),
+              padding: EdgeInsets.fromLTRB(inset, inset, inset, 0),
               sliver: SliverToBoxAdapter(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Container(
-                      clipBehavior: Clip.antiAlias,
-                      decoration: BoxDecoration(
-                        color: deskInk,
-                        borderRadius: BorderRadius.circular(18),
-                      ),
-                      child: Stack(
-                        alignment: Alignment.centerLeft,
-                        children: [
-                          if (!small)
-                            const Positioned(
-                              top: -10,
-                              bottom: -20,
-                              right: -10,
-                              width: 250,
-                              child: TicketArtwork(),
-                            ),
-                          Padding(
-                            padding: EdgeInsets.fromLTRB(
-                              small ? 18 : 28,
-                              24,
-                              small ? 18 : 228,
-                              24,
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  title,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .headlineMedium!
-                                      .copyWith(
-                                        color: deskPaper,
-                                        fontSize: small ? 27 : 34,
-                                      ),
-                                ),
-                                const SizedBox(height: 7),
-                                Text(
-                                  description,
-                                  style: const TextStyle(
-                                    color: Color(0xFFD8E1DA),
-                                    fontSize: 14,
-                                  ),
-                                ),
-                                if (account.isCustomer) ...[
-                                  const SizedBox(height: 15),
-                                  FilledButton.icon(
-                                    style: FilledButton.styleFrom(
-                                      backgroundColor: deskMint,
-                                      foregroundColor: deskInk,
-                                    ),
-                                    onPressed: _create,
-                                    icon: const Icon(Icons.add, size: 18),
-                                    label: const Text('New ticket'),
-                                  ),
-                                ],
-                              ],
-                            ),
+                    DeskPageHeading(
+                      title,
+                      description: description,
+                      actions: [
+                        if (account.isCustomer)
+                          FilledButton.icon(
+                            onPressed: _create,
+                            icon: const Icon(Icons.add, size: 18),
+                            label: const Text('New ticket'),
                           ),
-                        ],
-                      ),
+                      ],
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 20),
                     LayoutBuilder(
-                      builder: (context, metrics) {
-                        final columns = small
-                            ? 2
-                            : metrics.maxWidth / filters.length < 122
-                            ? 3
-                            : filters.length;
-                        return Column(
+                      builder: (context, bounds) {
+                        final compact = bounds.maxWidth < 560;
+                        return DeskTileGrid(
+                          columns: compact ? 2 : filters.length,
                           children: [
-                            for (
-                              int start = 0;
-                              start < filters.length;
-                              start += columns
-                            )
-                              Padding(
-                                padding: EdgeInsets.only(
-                                  top: start == 0 ? 0 : 8,
-                                ),
-                                child: IntrinsicHeight(
-                                  child: Row(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.stretch,
-                                    children: [
-                                      for (final f
-                                          in filters
-                                              .skip(start)
-                                              .take(columns)) ...[
-                                        if (f != filters[start])
-                                          const SizedBox(width: 8),
-                                        Expanded(
-                                          child: _StatusFilter(
-                                            label: f.$2,
-                                            count: _summary[f.$1],
-                                            icon: f.$3,
-                                            color: f.$4,
-                                            selected: _filter == f.$1,
-                                            compact: small,
-                                            onTap: () => _selectFilter(f.$1),
-                                          ),
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                ),
+                            for (final f in filters)
+                              _StatusFilter(
+                                label: f.$2,
+                                count: _summary[f.$1],
+                                icon: f.$3,
+                                color: f.$4,
+                                selected: _filter == f.$1,
+                                compact: compact,
+                                onTap: () => _selectFilter(f.$1),
                               ),
                           ],
                         );
@@ -529,9 +472,35 @@ class _TicketWorkspaceState extends State<TicketWorkspace> {
                     Row(
                       children: [
                         Expanded(
-                          child: Text(
-                            'Ticket list',
-                            style: Theme.of(context).textTheme.titleLarge,
+                          child: Wrap(
+                            spacing: 9,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              Text(
+                                _filter == 'all' ? 'Tickets' : selected.$2,
+                                style: Theme.of(context).textTheme.titleLarge,
+                              ),
+                              if (count != null)
+                                DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFE2EBE5),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 9,
+                                      vertical: 2,
+                                    ),
+                                    child: Text(
+                                      '$count',
+                                      style: const TextStyle(
+                                        color: deskGreen,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
                           ),
                         ),
                         IconButton(
@@ -542,63 +511,98 @@ class _TicketWorkspaceState extends State<TicketWorkspace> {
                       ],
                     ),
                     if (_error case final error?) TicketErrorText(error),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 8),
+                    if (table && _tickets.isNotEmpty)
+                      Container(
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFE7EDE9),
+                          borderRadius: BorderRadius.vertical(
+                            top: Radius.circular(12),
+                          ),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
+                        child: DefaultTextStyle(
+                          style: const TextStyle(
+                            color: deskMuted,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                          child: _TicketColumns(
+                            subject: const Text('Ticket'),
+                            status: const Text('Status & priority'),
+                            deadline: account.isCustomer
+                                ? null
+                                : const Text('Service deadline'),
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),
             ),
             if (_tickets.isEmpty)
               SliverPadding(
-                padding: EdgeInsets.all(padding),
+                padding: EdgeInsets.symmetric(horizontal: inset),
                 sliver: SliverToBoxAdapter(
                   child: _loading
-                      ? const Center(
-                          child: CircularProgressIndicator(
-                            semanticsLabel: 'Loading tickets',
+                      ? const Padding(
+                          padding: EdgeInsets.all(24),
+                          child: Center(
+                            child: CircularProgressIndicator(
+                              semanticsLabel: 'Loading tickets',
+                            ),
                           ),
                         )
-                      : Column(
-                          children: [
-                            const CircleAvatar(
-                              radius: 25,
-                              backgroundColor: Color(0xFFE5EBDD),
-                              child: Icon(
-                                Icons.inbox_outlined,
-                                color: deskGreen,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              _error != null
-                                  ? 'Use Refresh tickets to try again.'
-                                  : 'No tickets in this view.',
-                              style: Theme.of(context).textTheme.titleMedium,
-                            ),
-                          ],
+                      : DeskEmptyState(
+                          icon: _error == null
+                              ? selected.$3
+                              : Icons.cloud_off_outlined,
+                          title: _error != null
+                              ? 'Tickets could not be loaded'
+                              : _filter == 'overdue'
+                              ? 'No overdue tickets'
+                              : _filter != 'all'
+                              ? 'No tickets match this filter'
+                              : _scope == 'queue'
+                              ? 'No tickets waiting to be claimed'
+                              : 'No tickets yet',
+                          action: _error != null
+                              ? TextButton(
+                                  onPressed: _load,
+                                  child: const Text('Try again'),
+                                )
+                              : _filter != 'all'
+                              ? TextButton(
+                                  onPressed: () => _selectFilter('all'),
+                                  child: const Text('Show all tickets'),
+                                )
+                              : null,
                         ),
                 ),
               )
             else
               SliverPadding(
-                padding: EdgeInsets.symmetric(horizontal: padding),
+                padding: EdgeInsets.symmetric(horizontal: inset),
                 sliver: SliverList.builder(
                   itemCount: _tickets.length,
-                  itemBuilder: (context, index) {
-                    final t = _tickets[index];
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: _TicketRow(
-                        ticket: t,
-                        staff: !account.isCustomer,
-                        onTap: () => _open(t.id),
-                      ),
+                  itemBuilder: (context, i) {
+                    final t = _tickets[i];
+                    return _TicketRow(
+                      ticket: t,
+                      staff: !account.isCustomer,
+                      table: table,
+                      last: i == _tickets.length - 1,
+                      onTap: () => _open(t.id),
                     );
                   },
                 ),
               ),
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(16),
                 child: _nextBefore == null
                     ? const SizedBox.shrink()
                     : Center(
@@ -636,80 +640,69 @@ class _StatusFilter extends StatelessWidget {
   final Color color;
   final bool selected, compact;
   final VoidCallback onTap;
+
   @override
   Widget build(BuildContext context) {
     final shape = RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(12),
-      side: BorderSide(
-        color: selected ? deskGreen : deskLine,
-        width: selected ? 1.5 : 1,
+      side: BorderSide(color: selected ? deskGreen : deskLine),
+    );
+    final value = Text(
+      count?.toString() ?? '—',
+      style: TextStyle(
+        fontSize: compact ? 18 : 28,
+        height: 1.1,
+        fontWeight: FontWeight.w700,
+        color: selected ? deskGreen : deskInk,
+      ),
+    );
+    final symbol = Icon(icon, size: compact ? 17 : 21, color: color);
+    final name = Text(
+      label,
+      style: TextStyle(
+        fontWeight: FontWeight.w600,
+        fontSize: compact ? 12 : 13,
+        color: deskInk,
       ),
     );
     return Semantics(
       button: true,
-      onTap: onTap,
       selected: selected,
+      onTap: onTap,
       label: '$label · ${count ?? '—'}',
       excludeSemantics: true,
       child: Material(
-        color: selected ? const Color(0xFFEAF2E4) : deskPaper,
+        color: selected ? const Color(0xFFE6F1E8) : deskPaper,
         shape: shape,
         child: InkWell(
-          customBorder: shape,
           onTap: onTap,
+          customBorder: shape,
           child: Padding(
-            padding: EdgeInsets.all(compact ? 11 : 14),
+            padding: EdgeInsets.all(compact ? 10 : 14),
             child: compact
-                ? Row(
-                    children: [
-                      Icon(icon, size: 16, color: color),
-                      const SizedBox(width: 7),
-                      Expanded(
-                        child: Text(
-                          label,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 3),
-                      Text(
-                        count?.toString() ?? '—',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 18,
-                        ),
-                      ),
-                    ],
+                ? ConstrainedBox(
+                    constraints: const BoxConstraints(minHeight: 28),
+                    child: Row(
+                      children: [
+                        symbol,
+                        const SizedBox(width: 6),
+                        Expanded(child: name),
+                        const SizedBox(width: 3),
+                        value,
+                      ],
+                    ),
                   )
                 : Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         children: [
-                          Icon(icon, size: 18, color: color),
-                          const Spacer(),
-                          Text(
-                            count?.toString() ?? '—',
-                            style: TextStyle(
-                              fontSize: compact ? 20 : 25,
-                              height: 1.1,
-                              fontWeight: FontWeight.w700,
-                              color: deskInk,
-                            ),
-                          ),
+                          Expanded(child: value),
+                          symbol,
                         ],
                       ),
                       const SizedBox(height: 8),
-                      Text(
-                        label,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: deskMuted,
-                        ),
-                      ),
+                      name,
                     ],
                   ),
           ),
@@ -719,72 +712,174 @@ class _StatusFilter extends StatelessWidget {
   }
 }
 
+// Keep the list headers aligned with their cells for both roles.
+class _TicketColumns extends StatelessWidget {
+  const _TicketColumns({
+    required this.subject,
+    required this.status,
+    this.deadline,
+    this.trailing,
+  });
+  final Widget subject, status;
+  final Widget? deadline, trailing;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: [
+      Expanded(flex: 5, child: subject),
+      const SizedBox(width: 16),
+      Expanded(flex: 3, child: status),
+      if (deadline != null) ...[
+        const SizedBox(width: 12),
+        Expanded(flex: 3, child: deadline!),
+      ],
+      SizedBox(width: 24, child: trailing),
+    ],
+  );
+}
+
 class _TicketRow extends StatelessWidget {
   const _TicketRow({
     required this.ticket,
     required this.staff,
+    required this.table,
+    required this.last,
     required this.onTap,
   });
   final Ticket ticket;
-  final bool staff;
+  final bool staff, table, last;
   final VoidCallback onTap;
+
   @override
   Widget build(BuildContext context) {
     final t = ticket;
-    final badges = TicketBadges(ticket: t);
-    return Card(
-      margin: EdgeInsets.zero,
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          child: LayoutBuilder(
-            builder: (context, bounds) {
-              final wide = bounds.maxWidth >= 740;
-              final info = Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '#${t.id}  ·  ${ticketTime(context, t.createdAt)}',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: deskMuted,
-                      fontWeight: FontWeight.w500,
-                    ),
+    final subject = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          t.subject,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: 4),
+        Text(
+          [
+            '#${t.id}',
+            if (staff && t.customerName != null) t.customerName!,
+            if (staff)
+              t.ownerName ?? 'Unassigned'
+            else
+              ticketTime(context, t.createdAt),
+          ].join('  ·  '),
+          style: const TextStyle(fontSize: 12, color: deskMuted),
+        ),
+      ],
+    );
+    final status = TicketBadges(
+      ticket: t,
+      customerView: !staff,
+      showOverdue: false,
+    );
+    final deadline = staff ? _QueueDeadline(ticket: t) : null;
+    const arrow = Icon(Icons.chevron_right, size: 17, color: deskMuted);
+    final radius = table
+        ? BorderRadius.vertical(bottom: Radius.circular(last ? 12 : 0))
+        : BorderRadius.circular(12);
+    return Padding(
+      padding: EdgeInsets.only(bottom: table ? 0 : 8),
+      child: Material(
+        color: deskPaper,
+        shape: RoundedRectangleBorder(borderRadius: radius),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: radius,
+              border: table
+                  ? const Border(bottom: BorderSide(color: deskLine))
+                  : Border.all(color: deskLine),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: table
+                ? _TicketColumns(
+                    subject: subject,
+                    status: status,
+                    deadline: deadline,
+                    trailing: arrow,
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(child: subject),
+                          arrow,
+                        ],
+                      ),
+                      const SizedBox(height: 9),
+                      status,
+                      if (deadline != null) ...[
+                        const SizedBox(height: 8),
+                        deadline,
+                      ],
+                    ],
                   ),
-                  const SizedBox(height: 5),
-                  Text(
-                    t.subject,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  if (staff)
-                    Text(
-                      [
-                        if (t.customerName != null) t.customerName!,
-                        t.ownerName ?? 'Unassigned',
-                      ].join('  ·  '),
-                      style: const TextStyle(color: deskMuted, fontSize: 13),
-                    ),
-                  if (!wide) ...[const SizedBox(height: 8), badges],
-                ],
-              );
-              return Row(
-                children: [
-                  Expanded(child: info),
-                  if (wide) ...[
-                    const SizedBox(width: 8),
-                    SizedBox(width: 250, child: badges),
-                  ],
-                  const SizedBox(width: 6),
-                  const Icon(Icons.chevron_right, size: 18, color: deskMuted),
-                ],
-              );
-            },
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _QueueDeadline extends StatelessWidget {
+  const _QueueDeadline({required this.ticket});
+  final Ticket ticket;
+
+  @override
+  Widget build(BuildContext context) {
+    final timing = ticket.timing;
+    if (timing == null) return const Text('—');
+    final milestones = [
+      ('Reply', timing.firstResponse),
+      ('Resolution', timing.resolution),
+    ];
+    final pending =
+        milestones
+            .where((m) => m.$2.status == 'pending' || m.$2.status == 'overdue')
+            .toList()
+          ..sort((a, b) => a.$2.deadline.compareTo(b.$2.deadline));
+    if (pending.isNotEmpty) {
+      final overdue = pending.where((m) => m.$2.status == 'overdue');
+      final shown = overdue.isEmpty ? pending.take(1) : overdue;
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final milestone in shown) ...[
+            Text(
+              '${milestone.$1} ${milestone.$2.status == 'overdue' ? 'overdue' : 'due'}',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: milestone.$2.status == 'overdue' ? deskLate : deskInk,
+              ),
+            ),
+            Text(
+              slaTime(context, milestone.$2.deadline),
+              style: const TextStyle(fontSize: 12, color: deskMuted),
+            ),
+          ],
+        ],
+      );
+    }
+    if (ticket.status == 'waiting_on_customer') {
+      return const Text('Clock paused', style: TextStyle(color: deskAmber));
+    }
+    return Text(
+      'Resolution · ${timing.resolution.label}',
+      style: TextStyle(
+        color: timing.resolution.status == 'late' ? deskLate : deskMuted,
       ),
     );
   }

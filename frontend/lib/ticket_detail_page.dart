@@ -32,6 +32,7 @@ class _TicketDetailPageState extends State<TicketDetailPage> {
   List<PendingAttachment> _noteFiles = [];
   TicketDetail? _detail;
   String? _error;
+  String? _composerError;
   bool _loading = true;
   bool _saving = false;
   bool _noteSelected = false;
@@ -70,17 +71,29 @@ class _TicketDetailPageState extends State<TicketDetailPage> {
     }
   }
 
-  Future<void> _save(Future<void> Function() action) async {
+  Future<void> _save(
+    Future<void> Function() action, {
+    bool composing = false,
+  }) async {
     if (_saving || _loading) return;
     setState(() {
       _saving = true;
       _error = null;
+      _composerError = null;
     });
     try {
       await action();
       if (mounted) await _load();
     } on ApiException catch (error) {
-      if (mounted) setState(() => _error = error.message);
+      if (mounted) {
+        setState(() {
+          if (composing) {
+            _composerError = error.message;
+          } else {
+            _error = error.message;
+          }
+        });
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -96,7 +109,7 @@ class _TicketDetailPageState extends State<TicketDetailPage> {
     final files = privateNote ? _noteFiles : _replyFiles;
     if (body.isEmpty && files.isEmpty) {
       setState(
-        () => _error = privateNote
+        () => _composerError = privateNote
             ? 'Enter a private note or attach a file.'
             : 'Enter a reply or attach a file.',
       );
@@ -119,7 +132,7 @@ class _TicketDetailPageState extends State<TicketDetailPage> {
           }
         });
       }
-    });
+    }, composing: true);
   }
 
   Future<void> _resolve(Ticket ticket) async {
@@ -247,11 +260,10 @@ class _TicketDetailPageState extends State<TicketDetailPage> {
     final mayWait = !privateNote && detail.can('reply_and_wait');
     final sendingAndWaiting = mayWait && _waitForReply;
     final info = <Widget>[
-      Text('Ticket details', style: theme.textTheme.titleMedium),
-      const SizedBox(height: 12),
-      TicketBadges(ticket: ticket),
-      const SizedBox(height: 8),
-      Text(ticketTime(context, ticket.createdAt)),
+      Text(
+        'Opened ${ticketTime(context, ticket.createdAt)}',
+        style: const TextStyle(color: deskMuted),
+      ),
       if (isStaff) ...[
         const SizedBox(height: 8),
         Text('Customer: ${ticket.customerName}'),
@@ -326,7 +338,6 @@ class _TicketDetailPageState extends State<TicketDetailPage> {
             'Open a new ticket to continue. The reopening window has ended.',
           ),
       ],
-      if (error != null) TicketErrorText(error),
       if (ticket.timing case final timing?) ...[
         const SizedBox(height: 18),
         TicketTimingPanel(timing: timing),
@@ -348,7 +359,10 @@ class _TicketDetailPageState extends State<TicketDetailPage> {
       ],
     ];
     final conversation = <Widget>[
-      Text('Conversation', style: theme.textTheme.titleLarge),
+      Semantics(
+        header: true,
+        child: Text('Conversation', style: theme.textTheme.titleLarge),
+      ),
       const SizedBox(height: 10),
       for (final message in detail.messages)
         Padding(
@@ -382,12 +396,36 @@ class _TicketDetailPageState extends State<TicketDetailPage> {
                           ? (selection) => setState(() {
                               _noteSelected = selection.single;
                               _waitForReply = false;
-                              _error = null;
+                              _composerError = null;
                             })
                           : null,
                     ),
                   ),
                   const SizedBox(height: 12),
+                ],
+                if (isStaff) ...[
+                  Row(
+                    children: [
+                      Icon(
+                        privateNote ? Icons.lock_outline : Icons.forum_outlined,
+                        size: 17,
+                        color: privateNote ? deskAmber : deskGreen,
+                      ),
+                      const SizedBox(width: 7),
+                      Expanded(
+                        child: Text(
+                          privateNote
+                              ? 'Only your team can see this note'
+                              : 'Visible to the customer',
+                          style: TextStyle(
+                            color: privateNote ? deskAmber : deskGreen,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
                 ],
                 TextField(
                   key: ValueKey(privateNote),
@@ -404,7 +442,6 @@ class _TicketDetailPageState extends State<TicketDetailPage> {
                     labelText: privateNote
                         ? 'Private note'
                         : (isStaff ? 'Reply to customer' : 'Your reply'),
-                    helperText: privateNote ? 'Visible to staff only.' : null,
                     alignLabelWithHint: true,
                     border: const OutlineInputBorder(),
                     counterText: '',
@@ -429,11 +466,16 @@ class _TicketDetailPageState extends State<TicketDetailPage> {
                     controlAffinity: ListTileControlAffinity.leading,
                     value: _waitForReply,
                     title: const Text('Wait for customer reply'),
+                    subtitle: const Text(
+                      'Pauses the SLA clock until the customer replies.',
+                    ),
                     onChanged: enabled
                         ? (value) =>
                               setState(() => _waitForReply = value ?? false)
                         : null,
                   ),
+                if (_composerError case final message?)
+                  TicketErrorText(message),
                 Align(
                   alignment: Alignment.centerRight,
                   child: FilledButton.icon(
@@ -471,18 +513,51 @@ class _TicketDetailPageState extends State<TicketDetailPage> {
         final summary = Card(
           semanticContainer: false,
           margin: EdgeInsets.zero,
-          child: Padding(
-            padding: const EdgeInsets.all(18),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: info,
-            ),
-          ),
+          child: wide
+              ? Padding(
+                  padding: const EdgeInsets.all(18),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        'Ticket details',
+                        style: theme.textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 10),
+                      ...info,
+                    ],
+                  ),
+                )
+              : ExpansionTile(
+                  key: PageStorageKey('details-${ticket.id}'),
+                  initiallyExpanded: detail.can('claim') && !canReply,
+                  leading: const Icon(Icons.tune, color: deskGreen),
+                  title: const Text('Ticket details'),
+                  subtitle: Text(
+                    isStaff
+                        ? 'Assignment and SLA deadlines'
+                        : 'Dates and ticket options',
+                  ),
+                  shape: const Border(),
+                  collapsedShape: const Border(),
+                  childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: info,
+                ),
         );
         return ListView(
           padding: EdgeInsets.fromLTRB(wide ? 32 : 16, 24, wide ? 32 : 16, 32),
           children: [
-            Text(ticket.subject, style: theme.textTheme.headlineMedium),
+            Semantics(
+              header: true,
+              child: Text(
+                ticket.subject,
+                style: theme.textTheme.headlineMedium,
+              ),
+            ),
+            const SizedBox(height: 10),
+            TicketBadges(ticket: ticket, customerView: !isStaff),
+            if (error != null) TicketErrorText(error),
             const SizedBox(height: 18),
             if (wide)
               Row(
@@ -561,12 +636,18 @@ class _MessageCard extends StatelessWidget {
                   'Private note',
                   style: TextStyle(fontWeight: FontWeight.w600),
                 ),
-              Text(ticketTime(context, message.createdAt)),
+              Text(
+                ticketTime(context, message.createdAt),
+                style: const TextStyle(fontSize: 12, color: deskMuted),
+              ),
             ],
           ),
           if (message.body.isNotEmpty) ...[
             const SizedBox(height: 8),
-            SelectableText(message.body),
+            SelectableText(
+              message.body,
+              style: const TextStyle(fontSize: 15, height: 1.55),
+            ),
           ],
           if (message.attachments.isNotEmpty) ...[
             const SizedBox(height: 6),

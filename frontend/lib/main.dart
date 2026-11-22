@@ -204,12 +204,13 @@ class _FrontdeskAppState extends State<FrontdeskApp>
   }
 
   Widget _entryPage({Widget? content}) => Scaffold(
+    backgroundColor: deskPaper,
     body: SafeArea(
       child: LayoutBuilder(
         builder: (context, bounds) {
           final wide = bounds.maxWidth >= 840;
           final form = ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 380),
+            constraints: const BoxConstraints(maxWidth: 400),
             child: content ?? _content(),
           );
           if (!wide) {
@@ -225,7 +226,16 @@ class _FrontdeskAppState extends State<FrontdeskApp>
           }
           return Row(
             children: [
-              const Expanded(flex: 10, child: _EntryBanner(compact: false)),
+              Expanded(
+                flex: 10,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 0, 16),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(22),
+                    child: const _EntryBanner(compact: false),
+                  ),
+                ),
+              ),
               Expanded(
                 flex: 11,
                 child: Center(
@@ -252,12 +262,12 @@ class _EntryBanner extends StatelessWidget {
     if (compact) {
       return Container(
         color: deskInk,
-        height: 118,
+        height: 112,
         child: Stack(
           children: [
             const Positioned(
               right: -10,
-              width: 138,
+              width: 108,
               top: -5,
               bottom: -5,
               child: TicketArtwork(),
@@ -266,7 +276,18 @@ class _EntryBanner extends StatelessWidget {
               alignment: Alignment.centerLeft,
               child: Padding(
                 padding: EdgeInsets.only(left: 24),
-                child: DeskBrand(dark: true),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    DeskBrand(dark: true),
+                    SizedBox(height: 8),
+                    Text(
+                      'Mon–Fri · 09:30–18:30 IST',
+                      style: TextStyle(color: deskRailText, fontSize: 12),
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
@@ -442,6 +463,16 @@ class _CredentialsFormState extends State<_CredentialsForm> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          const Align(
+            alignment: Alignment.centerLeft,
+            child: CircleAvatar(
+              radius: 26,
+              backgroundColor: deskMint,
+              foregroundColor: deskInk,
+              child: Icon(Icons.mark_email_unread_outlined),
+            ),
+          ),
+          const SizedBox(height: 18),
           Text('Check your email', style: theme.textTheme.headlineMedium),
           const SizedBox(height: 16),
           const Text(
@@ -481,7 +512,7 @@ class _CredentialsFormState extends State<_CredentialsForm> {
                   ? 'Choose a password to finish creating your account.'
                   : _registering
                   ? 'We’ll email you a link to finish creating your account.'
-                  : 'Enter your account details to open your workspace.',
+                  : 'Use your Frontdesk email and password.',
               style: const TextStyle(color: deskMuted),
             ),
             const SizedBox(height: 24),
@@ -492,6 +523,7 @@ class _CredentialsFormState extends State<_CredentialsForm> {
                 autofillHints: const [AutofillHints.name],
                 textInputAction: TextInputAction.next,
                 decoration: const InputDecoration(
+                  prefixIcon: Icon(Icons.person_outline),
                   labelText: 'Full name',
                   border: OutlineInputBorder(),
                 ),
@@ -515,6 +547,7 @@ class _CredentialsFormState extends State<_CredentialsForm> {
                   AutofillHints.email,
                 ],
                 decoration: const InputDecoration(
+                  prefixIcon: Icon(Icons.mail_outline),
                   labelText: 'Email address',
                   border: OutlineInputBorder(),
                 ),
@@ -537,6 +570,7 @@ class _CredentialsFormState extends State<_CredentialsForm> {
                 textInputAction: TextInputAction.done,
                 onFieldSubmitted: (_) => _submit(),
                 decoration: InputDecoration(
+                  prefixIcon: const Icon(Icons.lock_outline),
                   labelText: verifying ? 'New password' : 'Password',
                   border: const OutlineInputBorder(),
                   helperText: verifying ? 'Use 15 to 128 characters.' : null,
@@ -577,6 +611,7 @@ class _CredentialsFormState extends State<_CredentialsForm> {
                     : 'Sign in',
               ),
             ),
+            const SizedBox(height: 12),
             TextButton(
               onPressed: _submitting
                   ? null

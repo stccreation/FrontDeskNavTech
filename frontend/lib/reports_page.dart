@@ -204,16 +204,6 @@ class _ReportsPageState extends State<ReportsPage> {
     final locale = MaterialLocalizations.of(context);
     return Scaffold(
       backgroundColor: ticketPageColor,
-      appBar: AppBar(
-        title: const Text('SLA reports'),
-        actions: [
-          IconButton(
-            onPressed: _loading ? null : _load,
-            tooltip: 'Refresh reports',
-            icon: const Icon(Icons.refresh),
-          ),
-        ],
-      ),
       body: Align(
         alignment: Alignment.topCenter,
         child: ConstrainedBox(
@@ -221,6 +211,27 @@ class _ReportsPageState extends State<ReportsPage> {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
             children: [
+              DeskPageHeading(
+                'SLA reports',
+                description:
+                    'Review service deadlines and ticket outcomes for the selected period.',
+                actions: [
+                  IconButton(
+                    onPressed: _loading ? null : _load,
+                    tooltip: 'Refresh reports',
+                    icon: const Icon(Icons.refresh),
+                  ),
+                  if (report != null)
+                    OutlinedButton.icon(
+                      onPressed: _loading ? null : () => _chooseDates(report),
+                      icon: const Icon(Icons.date_range_outlined, size: 18),
+                      label: Text(
+                        '${locale.formatShortDate(report.period.start)} – ${locale.formatShortDate(report.period.end)}',
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 20),
               if (error != null) TicketErrorText(error),
               if (report == null && _loading)
                 const Center(
@@ -229,20 +240,8 @@ class _ReportsPageState extends State<ReportsPage> {
                   ),
                 ),
               if (report != null) ...[
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: OutlinedButton.icon(
-                    onPressed: _loading ? null : () => _chooseDates(report),
-                    icon: const Icon(Icons.date_range_outlined),
-                    label: Text(
-                      '${locale.formatShortDate(report.period.start)} – ${locale.formatShortDate(report.period.end)}',
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 8,
+                DeskTileGrid(
+                  columns: 2,
                   children: [
                     _Metric(
                       label: 'First responses missed',
@@ -260,33 +259,6 @@ class _ReportsPageState extends State<ReportsPage> {
                 _ClosureCard(
                   resolved: report.resolved,
                   inactive: report.inactive,
-                ),
-                const SizedBox(height: 24),
-                Text('Reply notifications', style: theme.textTheme.titleLarge),
-                const SizedBox(height: 4),
-                Text(
-                  report.notifications['delivery_configured'] == true
-                      ? 'SMTP delivery configured. Sent means the mail server accepted the email.'
-                      : 'SMTP setup is pending. Reply notifications are queued.',
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 8,
-                  children: [
-                    _Metric(
-                      label: 'Queued',
-                      value: report.notifications['queued'] as int,
-                    ),
-                    _Metric(
-                      label: 'Sent',
-                      value: report.notifications['sent'] as int,
-                    ),
-                    _Metric(
-                      label: 'Failed',
-                      value: report.notifications['failed'] as int,
-                    ),
-                  ],
                 ),
                 const SizedBox(height: 24),
                 Text('Missed deadlines', style: theme.textTheme.titleLarge),
@@ -318,7 +290,10 @@ class _ReportsPageState extends State<ReportsPage> {
                 ),
                 const SizedBox(height: 8),
                 if (_rows.isEmpty && !_loading)
-                  const Text('No missed deadlines in this view.'),
+                  const DeskEmptyState(
+                    icon: Icons.task_alt,
+                    title: 'No missed deadlines in this view',
+                  ),
                 if (_loading && _rows.isEmpty) const LinearProgressIndicator(),
                 for (final row in _rows)
                   Card(
@@ -352,6 +327,31 @@ class _ReportsPageState extends State<ReportsPage> {
                       child: const Text('Load more missed deadlines'),
                     ),
                   ),
+                const SizedBox(height: 24),
+                Text('Reply notifications', style: theme.textTheme.titleLarge),
+                const SizedBox(height: 6),
+                Text(
+                  report.notifications['delivery_configured'] == true
+                      ? 'Sent emails have been accepted by the mail server.'
+                      : 'SMTP setup is pending. Reply notifications are queued.',
+                  style: const TextStyle(color: deskMuted),
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 8,
+                  children: [
+                    for (final status in const {
+                      'queued': 'Queued',
+                      'sent': 'Sent',
+                      'failed': 'Failed',
+                    }.entries)
+                      _Metric(
+                        label: status.value,
+                        value: report.notifications[status.key] as int,
+                      ),
+                  ],
+                ),
               ],
             ],
           ),
@@ -425,6 +425,7 @@ class _ClosureCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(5),
           minHeight: 6,
           color: label == 'Resolved' ? deskGreen : const Color(0xFFA46C33),
+          backgroundColor: const Color(0xFFE7EDE9),
           value: fraction,
           semanticsLabel: '$label share of closures',
         ),

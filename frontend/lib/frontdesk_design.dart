@@ -2,13 +2,17 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-const deskInk = Color(0xFF132E32);
-const deskGreen = Color(0xFF116350);
-const deskMint = Color(0xFFD3EEAC);
-const deskCanvas = Color(0xFFF6F6F1);
-const deskLine = Color(0xFFDBDFD7);
-const deskMuted = Color(0xFF516561);
-const deskPaper = Color(0xFFFFFFFC);
+const deskInk = Color(0xFF142F34);
+const deskGreen = Color(0xFF116858);
+const deskMint = Color(0xFFD1F2AD);
+const deskCanvas = Color(0xFFF4F6F5);
+const deskLine = Color(0xFFD6DFDB);
+const deskMuted = Color(0xFF536961);
+const deskPaper = Colors.white;
+const deskRail = Color(0xFF153631);
+const deskRailText = Color(0xFFD3E2DA);
+const deskAmber = Color(0xFF825410);
+const deskLate = Color(0xFFA33C35);
 
 ThemeData frontdeskTheme() {
   final colors = ColorScheme.fromSeed(seedColor: deskGreen).copyWith(
@@ -21,7 +25,11 @@ ThemeData frontdeskTheme() {
     onSecondaryContainer: deskInk,
     error: const Color(0xFFAB3B32),
   );
-  final base = ThemeData(useMaterial3: true, colorScheme: colors);
+  final base = ThemeData(
+    useMaterial3: true,
+    colorScheme: colors,
+    fontFamily: 'Roboto',
+  );
   const buttonShape = RoundedRectangleBorder(
     borderRadius: BorderRadius.all(Radius.circular(10)),
   );
@@ -54,15 +62,15 @@ ThemeData frontdeskTheme() {
       ),
     ),
     appBarTheme: const AppBarThemeData(
-      backgroundColor: deskInk,
-      foregroundColor: Colors.white,
+      backgroundColor: deskPaper,
+      foregroundColor: deskInk,
       elevation: 0,
       scrolledUnderElevation: 0,
       centerTitle: false,
       titleTextStyle: TextStyle(
         fontSize: 19,
         fontWeight: FontWeight.w600,
-        color: Colors.white,
+        color: deskInk,
       ),
     ),
     cardTheme: CardThemeData(
@@ -103,6 +111,131 @@ ThemeData frontdeskTheme() {
   );
 }
 
+class DeskPageHeading extends StatelessWidget {
+  const DeskPageHeading(
+    this.title, {
+    super.key,
+    this.description,
+    this.actions = const [],
+  });
+
+  final String title;
+  final String? description;
+  final List<Widget> actions;
+
+  @override
+  Widget build(BuildContext context) {
+    final heading = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Semantics(
+          header: true,
+          child: Text(title, style: Theme.of(context).textTheme.headlineMedium),
+        ),
+        if (description != null) ...[
+          const SizedBox(height: 6),
+          Text(
+            description!,
+            style: const TextStyle(color: deskMuted, height: 1.45),
+          ),
+        ],
+      ],
+    );
+    if (actions.isEmpty) return heading;
+    final buttons = Wrap(
+      spacing: 6,
+      runSpacing: 4,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: actions,
+    );
+    return LayoutBuilder(
+      builder: (context, bounds) {
+        if (bounds.maxWidth < 560) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [heading, const SizedBox(height: 12), buttons],
+          );
+        }
+        return Row(
+          children: [
+            Expanded(child: heading),
+            const SizedBox(width: 16),
+            buttons,
+          ],
+        );
+      },
+    );
+  }
+}
+
+// A short row of metrics can wrap its labels without misaligning adjacent tiles.
+class DeskTileGrid extends StatelessWidget {
+  const DeskTileGrid({super.key, required this.columns, required this.children})
+    : assert(columns > 0);
+  final int columns;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    spacing: 8,
+    children: [
+      for (var start = 0; start < children.length; start += columns)
+        IntrinsicHeight(
+          child: Row(
+            spacing: 8,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (var i = start; i < start + columns; i++)
+                Expanded(
+                  child: i < children.length
+                      ? children[i]
+                      : const SizedBox.shrink(),
+                ),
+            ],
+          ),
+        ),
+    ],
+  );
+}
+
+class DeskEmptyState extends StatelessWidget {
+  const DeskEmptyState({
+    super.key,
+    required this.icon,
+    required this.title,
+    this.action,
+  });
+
+  final IconData icon;
+  final String title;
+  final Widget? action;
+
+  @override
+  Widget build(BuildContext context) => Card(
+    margin: EdgeInsets.zero,
+    semanticContainer: false,
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 28),
+      child: Column(
+        children: [
+          CircleAvatar(
+            backgroundColor: const Color(0xFFE9F1EB),
+            foregroundColor: deskGreen,
+            child: Icon(icon, size: 22),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          if (action != null) ...[const SizedBox(height: 8), action!],
+        ],
+      ),
+    ),
+  );
+}
+
 class DeskBrand extends StatelessWidget {
   const DeskBrand({super.key, this.dark = false});
   final bool dark;
@@ -125,13 +258,19 @@ class DeskBrand extends StatelessWidget {
         ),
       ),
       const SizedBox(width: 10),
-      Text(
-        'Frontdesk',
-        style: TextStyle(
-          fontSize: 23,
-          letterSpacing: -1.1,
-          fontWeight: FontWeight.w800,
-          color: dark ? Colors.white : deskInk,
+      Flexible(
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            'Frontdesk',
+            style: TextStyle(
+              fontSize: 23,
+              letterSpacing: -1.1,
+              fontWeight: FontWeight.w800,
+              color: dark ? Colors.white : deskInk,
+            ),
+          ),
         ),
       ),
     ],
@@ -163,7 +302,7 @@ class _BrandMark extends CustomPainter {
   bool shouldRepaint(_BrandMark old) => old.color != color;
 }
 
-// Printed support tickets scale as a single illustration in the two headers.
+// The sign-in illustration scales to the available panel.
 class TicketArtwork extends StatelessWidget {
   const TicketArtwork({super.key});
   @override

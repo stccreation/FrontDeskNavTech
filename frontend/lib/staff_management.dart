@@ -65,20 +65,8 @@ class _StaffManagementPageState extends State<StaffManagementPage> {
   Widget build(BuildContext context) {
     final roster = _roster;
     final error = _error;
-    final theme = Theme.of(context);
     return Scaffold(
       backgroundColor: ticketPageColor,
-      appBar: AppBar(
-        title: const Text('Staff Management'),
-        actions: [
-          IconButton(
-            onPressed: _loading ? null : _load,
-            tooltip: 'Refresh staff',
-            icon: const Icon(Icons.refresh),
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
       body: SafeArea(
         child: Align(
           alignment: Alignment.topCenter,
@@ -87,21 +75,23 @@ class _StaffManagementPageState extends State<StaffManagementPage> {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
               children: [
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 8,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  alignment: WrapAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      widget.isAdmin ? 'Teams' : 'My team',
-                      style: theme.textTheme.headlineMedium,
+                DeskPageHeading(
+                  widget.isAdmin ? 'Staff management' : 'My team',
+                  description: widget.isAdmin
+                      ? 'Manage team members and their reporting assignments.'
+                      : 'Manage the support agents assigned to you.',
+                  actions: [
+                    IconButton(
+                      tooltip: 'Refresh staff',
+                      onPressed: _loading ? null : _load,
+                      icon: const Icon(Icons.refresh),
                     ),
-                    FilledButton(
+                    FilledButton.icon(
+                      icon: const Icon(Icons.person_add_alt_outlined, size: 18),
                       onPressed: _loading || roster == null
                           ? null
                           : () => _edit(),
-                      child: Text(
+                      label: Text(
                         widget.isAdmin ? 'Add staff' : 'Add support agent',
                       ),
                     ),
@@ -140,14 +130,15 @@ class _StaffManagementPageState extends State<StaffManagementPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(label, style: Theme.of(context).textTheme.titleLarge),
+        Text(
+          '$label (${members.length})',
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
         const SizedBox(height: 8),
         if (members.isEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            child: Text(
-              isAgent ? 'No support agents yet.' : 'No managers yet.',
-            ),
+          DeskEmptyState(
+            icon: Icons.groups_outlined,
+            title: isAgent ? 'No support agents yet' : 'No managers yet',
           ),
         for (final member in members)
           Card(

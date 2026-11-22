@@ -155,17 +155,6 @@ class _HolidayCalendarPageState extends State<HolidayCalendarPage> {
     final locale = MaterialLocalizations.of(context);
     return Scaffold(
       backgroundColor: ticketPageColor,
-      appBar: AppBar(
-        title: const Text('Holiday calendar'),
-        actions: [
-          IconButton(
-            onPressed: busy ? null : _load,
-            tooltip: 'Refresh holidays',
-            icon: const Icon(Icons.refresh),
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
       body: SafeArea(
         child: Align(
           alignment: Alignment.topCenter,
@@ -174,26 +163,25 @@ class _HolidayCalendarPageState extends State<HolidayCalendarPage> {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
               children: [
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 8,
-                  alignment: WrapAlignment.spaceBetween,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    Text(
-                      'Working hours',
-                      style: Theme.of(context).textTheme.headlineMedium,
+                DeskPageHeading(
+                  'Holiday calendar',
+                  description:
+                      'Working hours are Monday to Friday, 9:30 AM–6:30 PM IST. Holidays pause working time.',
+                  actions: [
+                    IconButton(
+                      tooltip: 'Refresh holidays',
+                      onPressed: busy ? null : _load,
+                      icon: const Icon(Icons.refresh),
                     ),
-                    FilledButton(
+                    FilledButton.icon(
                       onPressed: busy || schedule == null
                           ? null
                           : () => _add(schedule.today),
-                      child: const Text('Add holiday'),
+                      icon: const Icon(Icons.add, size: 18),
+                      label: const Text('Add holiday'),
                     ),
                   ],
                 ),
-                const SizedBox(height: 4),
-                const Text('Monday to Friday · 9:30 AM–6:30 PM IST'),
                 if (error != null) TicketErrorText(error),
                 const SizedBox(height: 22),
                 if (schedule == null && _loading)
@@ -204,7 +192,10 @@ class _HolidayCalendarPageState extends State<HolidayCalendarPage> {
                   ),
                 if (schedule != null) ...[
                   if (schedule.holidays.isEmpty)
-                    const Text('No holidays configured.'),
+                    const DeskEmptyState(
+                      icon: Icons.event_available_outlined,
+                      title: 'No holidays scheduled',
+                    ),
                   for (final holiday in schedule.holidays)
                     Card(
                       margin: const EdgeInsets.only(bottom: 8),

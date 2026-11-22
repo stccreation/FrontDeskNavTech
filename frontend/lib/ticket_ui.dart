@@ -84,7 +84,14 @@ class TicketTimingPanel extends StatelessWidget {
 }
 
 class TicketBadges extends StatelessWidget {
-  const TicketBadges({super.key, required this.ticket});
+  const TicketBadges({
+    super.key,
+    required this.ticket,
+    this.customerView = false,
+    this.showOverdue = true,
+  });
+  final bool showOverdue;
+  final bool customerView;
 
   final Ticket ticket;
 
@@ -105,19 +112,25 @@ class TicketBadges extends StatelessWidget {
       spacing: 8,
       runSpacing: 4,
       children: [
-        _badge(ticket.statusLabel, statusFill, statusInk),
+        _badge(
+          customerView && ticket.status == 'waiting_on_customer'
+              ? 'Needs your reply'
+              : ticket.statusLabel,
+          statusFill,
+          statusInk,
+        ),
         _badge(
           ticket.priorityLabel,
           urgent ? colors.errorContainer : colors.surfaceContainerHighest,
           urgent ? colors.onErrorContainer : colors.onSurfaceVariant,
         ),
-        if (ticket.timing?.firstResponse.status == 'overdue')
+        if (showOverdue && ticket.timing?.firstResponse.status == 'overdue')
           _badge(
             'Response overdue',
             colors.errorContainer,
             colors.onErrorContainer,
           ),
-        if (ticket.timing?.resolution.status == 'overdue')
+        if (showOverdue && ticket.timing?.resolution.status == 'overdue')
           _badge(
             'Resolution overdue',
             colors.errorContainer,
@@ -131,7 +144,7 @@ class TicketBadges extends StatelessWidget {
       DecoratedBox(
         decoration: BoxDecoration(
           color: background,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(14),
         ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -157,9 +170,22 @@ class TicketErrorText extends StatelessWidget {
     padding: const EdgeInsets.only(top: 8),
     child: Semantics(
       liveRegion: true,
-      child: Text(
-        message,
-        style: TextStyle(color: Theme.of(context).colorScheme.error),
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFEFEC),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.error_outline, color: deskLate, size: 18),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(message, style: const TextStyle(color: deskLate)),
+            ),
+          ],
+        ),
       ),
     ),
   );
