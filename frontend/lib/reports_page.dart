@@ -187,10 +187,35 @@ class _ReportsPageState extends State<ReportsPage> {
       context: context,
       firstDate: DateTime(report.today.year - 10),
       lastDate: report.today,
+      currentDate: report.today,
       initialDateRange: report.period,
+      helpText: 'Report date range',
+      saveText: 'Apply',
+      confirmText: 'Apply',
+      builder: (context, child) => Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 460, maxHeight: 560),
+            child: LayoutBuilder(
+              builder: (context, bounds) => MediaQuery(
+                data: MediaQuery.of(context).copyWith(size: bounds.biggest),
+                child: DatePickerTheme(
+                  data: DatePickerTheme.of(context).copyWith(
+                    rangePickerShape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                  ),
+                  child: child!,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
     if (!mounted || selected == null) return;
-    if (selected.end.difference(selected.start).inDays >= 366) {
+    if (selected.end.isAfter(DateUtils.addDaysToDate(selected.start, 365))) {
       setState(() => _error = 'Choose a period of up to 366 days.');
       return;
     }

@@ -290,7 +290,12 @@ class _LegendItem extends StatelessWidget {
           borderRadius: BorderRadius.circular(2),
         ),
       ),
-      Text(label, style: const TextStyle(fontSize: 12, color: deskMuted)),
+      Flexible(
+        child: Text(
+          label,
+          style: const TextStyle(fontSize: 12, color: deskMuted),
+        ),
+      ),
     ],
   );
 }
